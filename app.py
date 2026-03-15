@@ -1,3 +1,9 @@
+# I used AI as a coding partner to help me find and fix bugs in my guessing game.
+# The AI read through my code, explained what was broken and why, then applied the
+# fixes directly while I reviewed and approved each change. Together we also cleaned
+# up the code structure, wrote automated tests to make sure everything works, and
+# solved setup issues along the way.
+
 import random
 import streamlit as st
 from logic_utils import DIFFICULTY_CONFIG, parse_guess, check_guess, update_score
