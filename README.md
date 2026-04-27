@@ -85,7 +85,7 @@ flowchart TD
 
 ## System Walkthrough: End-to-End Examples
 
-### Example 1: Early Game with Out-of-Range Input Rejection
+### Example 1: Early Game with Input Validation and Confidence Scoring
 
 ![Gameplay Example 1: Input validation and confidence scoring](assets/screenshot_example1.png)
 
@@ -100,7 +100,7 @@ flowchart TD
 - Attempt counter updated accurately.
 - No invalid attempts consumed (if player had typed out-of-range, system would reject it).
 
-### Example 2: Mid-Game Guessing with Score Adjustment
+### Example 2: Mid-Game Guessing with Score Adjustment and Guardrails
 
 ![Gameplay Example 2: Score updates and hint feedback](assets/screenshot_example2.png)
 
