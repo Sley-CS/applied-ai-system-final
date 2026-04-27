@@ -83,38 +83,11 @@ flowchart TD
    - Input: difficulty Normal, secret 37, guess 37
    - Output: outcome Win, confidence 1.0, success banner, final score shown
 
-## System Walkthrough: End-to-End Examples
-
-### Example 1: Early Game with Input Validation and Confidence Scoring
+## Screenshots
 
 ![Gameplay Example 1: Input validation and confidence scoring](assets/screenshot_example1.png)
 
-**What happens:**
-- Player selects Normal difficulty (range 1-50).
-- Player enters guess 5 (in range).
-- System outputs: "Too Low" outcome, hint "Go HIGHER", confidence ~0.56, attempts incremented to 1.
-- Game state updates in real time; player can see the session summary sidebar showing closeness bars.
-
-**Key reliability features visible:**
-- Confidence score displayed to player for each guess.
-- Attempt counter updated accurately.
-- No invalid attempts consumed (if player had typed out-of-range, system would reject it).
-
-### Example 2: Mid-Game Guessing with Score Adjustment and Guardrails
-
 ![Gameplay Example 2: Score updates and hint feedback](assets/screenshot_example2.png)
-
-**What happens:**
-- Player continues game, enters guess 45 (too high).
-- System outputs: "Too High" outcome, hint "Go LOWER", confidence ~0.52, score adjusted.
-- Session summary now shows multiple attempts with temperature labels (Hot, Warm, Cold, Ice).
-- Developer Debug Info is visible in expander, showing internal state for transparency.
-
-**Key reliability features visible:**
-- Guardrails silently validated the event payload before logging.
-- Temperature feedback helps player navigate the range more intuitively.
-- All logs are saved to `assets/gameplay_log.jsonl` for later audit.
-- If a guardrail violation occurred, error would be logged to `assets/error_log.jsonl`.
 
 ## Design Decisions
 
