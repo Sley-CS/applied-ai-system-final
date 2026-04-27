@@ -1,5 +1,7 @@
 import sys
 import os
+import json
+from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from logic_utils import (
@@ -11,6 +13,11 @@ from logic_utils import (
     closeness_percent,
     history_summary,
     guess_temperature,
+    confidence_score,
+    build_game_event,
+    validate_game_event,
+    append_json_log,
+    append_error_log,
 )
 
 
@@ -255,3 +262,61 @@ def test_robot_loses_when_out_of_attempts():
     assert status == "lost"
     assert score == 0  # started at 0, deducted to floor of 0
     print(f"🤖 Robot lost after {attempts} attempts as expected.")
+
+
+# ── reliability mechanisms ────────────────────────────────────────────────────
+
+def test_confidence_score_win_is_one():
+    assert confidence_score(50, 50, 1, 100, "Win") == 1.0
+
+
+def test_confidence_score_non_win_stays_in_bounds():
+    score = confidence_score(40, 50, 1, 100, "Too Low")
+    assert 0.0 <= score <= 1.0
+
+
+def test_validate_game_event_accepts_valid_payload():
+    event = build_game_event("Normal", 42, "Too Low", 2, 5, 0.72)
+    ok, err = validate_game_event(event)
+    assert ok is True
+    assert err is None
+
+
+def test_validate_game_event_rejects_invalid_outcome():
+    event = build_game_event("Normal", 42, "Unknown", 2, 5, 0.72)
+    ok, err = validate_game_event(event)
+    assert ok is False
+    assert "Invalid game outcome" in err
+
+
+def test_append_json_log_writes_one_jsonl_line(tmp_path: Path):
+    log_file = tmp_path / "gameplay_log.jsonl"
+    event = build_game_event("Hard", 77, "Too High", 1, 0, 0.34)
+    append_json_log(str(log_file), event)
+
+    lines = log_file.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+
+    payload = json.loads(lines[0])
+    assert payload["difficulty"] == "Hard"
+    assert payload["guess"] == 77
+
+
+def test_append_error_log_writes_structured_error_payload(tmp_path: Path):
+    error_log_file = tmp_path / "error_log.jsonl"
+    context = {"difficulty": "Normal", "guess": 999}
+    append_error_log(
+        str(error_log_file),
+        stage="gameplay_log_write",
+        error=RuntimeError("disk full"),
+        context=context,
+    )
+
+    lines = error_log_file.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+
+    payload = json.loads(lines[0])
+    assert payload["stage"] == "gameplay_log_write"
+    assert payload["error_type"] == "RuntimeError"
+    assert payload["message"] == "disk full"
+    assert payload["context"]["guess"] == 999

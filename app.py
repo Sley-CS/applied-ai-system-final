@@ -8,12 +8,21 @@ import random
 import streamlit as st
 from logic_utils import (
     DIFFICULTY_CONFIG,
+    append_json_log,
+    append_error_log,
+    build_game_event,
     parse_guess,
     check_guess,
+    confidence_score,
     update_score,
+    validate_game_event,
     history_summary,
     guess_temperature,
 )
+
+
+LOG_PATH = "assets/gameplay_log.jsonl"
+ERROR_LOG_PATH = "assets/error_log.jsonl"
 
 
 def reset_game(difficulty: str) -> None:
@@ -27,6 +36,7 @@ def reset_game(difficulty: str) -> None:
     st.session_state.last_hint = None
     st.session_state.last_temperature = None
     st.session_state.last_outcome = None
+    st.session_state.last_confidence = None
     st.session_state.game_count += 1
 
 
@@ -116,6 +126,9 @@ if st.session_state.last_hint and st.session_state.show_hint:
     else:
         st.error(f"🥶 Ice cold. {st.session_state.last_hint}")
 
+if st.session_state.last_confidence is not None:
+    st.caption(f"Reliability confidence: {st.session_state.last_confidence:.2f}")
+
 if st.session_state.status == "won":
     st.balloons()
     st.success(
@@ -155,6 +168,8 @@ if submit and st.session_state.status == "playing":
 
     if not ok:
         st.error(err)
+    elif not isinstance(guess_int, int):
+        st.error("Please enter a whole number.")
     elif not (low <= guess_int <= high):
         st.error(f"Out of range! Please enter a number between {low} and {high}.")
     else:
@@ -170,9 +185,53 @@ if submit and st.session_state.status == "playing":
             low,
             high,
         )
+        st.session_state.last_confidence = confidence_score(
+            guess_int,
+            st.session_state.secret,
+            low,
+            high,
+            outcome,
+        )
         st.session_state.score = update_score(
             st.session_state.score, outcome, st.session_state.attempts
         )
+
+        event = build_game_event(
+            difficulty=st.session_state.difficulty,
+            guess=guess_int,
+            outcome=outcome,
+            attempts=st.session_state.attempts,
+            score=st.session_state.score,
+            confidence=st.session_state.last_confidence,
+        )
+        is_valid, validation_error = validate_game_event(event)
+        if not is_valid:
+            st.error(f"System guardrail triggered: {validation_error}")
+            try:
+                append_error_log(
+                    ERROR_LOG_PATH,
+                    stage="event_validation",
+                    error=ValueError(validation_error or "Unknown validation error"),
+                    context=event,
+                )
+            except Exception:
+                # Keep gameplay resilient even if error logging fails.
+                pass
+        else:
+            try:
+                append_json_log(LOG_PATH, event)
+            except Exception as exc:
+                st.warning("Log write failed. Gameplay will continue.")
+                try:
+                    append_error_log(
+                        ERROR_LOG_PATH,
+                        stage="gameplay_log_write",
+                        error=exc,
+                        context=event,
+                    )
+                except Exception:
+                    # Keep gameplay resilient even if error logging fails.
+                    pass
 
         if outcome == "Win":
             st.session_state.status = "won"

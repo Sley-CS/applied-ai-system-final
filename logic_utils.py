@@ -1,3 +1,7 @@
+import json
+from datetime import datetime, timezone
+
+
 DIFFICULTY_CONFIG = {
     "Easy":   {"range": (1, 20),  "attempts": 6},
     "Normal": {"range": (1, 50),  "attempts": 8},
@@ -180,3 +184,103 @@ def update_score(current_score: int, outcome: str, attempt_number: int) -> int:
     if outcome in ("Too High", "Too Low"):
         return max(0, current_score - 5)
     return current_score
+
+
+def confidence_score(
+    guess: int | float,
+    secret: int,
+    low: int,
+    high: int,
+    outcome: str,
+) -> float:
+    """Estimate answer confidence in the inclusive range 0.0 to 1.0.
+
+    The score is based on game outcome and numerical closeness so the UI can
+    expose reliability information to the player.
+    """
+    if outcome == "Win":
+        return 1.0
+
+    try:
+        closeness = closeness_percent(int(guess), secret, low, high)
+    except Exception:
+        return 0.0
+
+    # Scale to 0-1 and keep a minimum floor for valid in-range guesses.
+    return round(max(0.1, min(0.95, closeness / 100)), 2)
+
+
+def build_game_event(
+    difficulty: str,
+    guess: int,
+    outcome: str,
+    attempts: int,
+    score: int,
+    confidence: float,
+) -> dict[str, str | int | float]:
+    """Build a structured game event for logs and downstream validation."""
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "difficulty": difficulty,
+        "guess": guess,
+        "outcome": outcome,
+        "attempts": attempts,
+        "score": score,
+        "confidence": confidence,
+    }
+
+
+def validate_game_event(event: dict[str, str | int | float]) -> tuple[bool, str | None]:
+    """Apply guardrails to a game event before it is accepted or logged."""
+    required_fields = {
+        "timestamp",
+        "difficulty",
+        "guess",
+        "outcome",
+        "attempts",
+        "score",
+        "confidence",
+    }
+    if not required_fields.issubset(set(event.keys())):
+        return False, "Missing required logging fields."
+
+    if event["outcome"] not in {"Win", "Too High", "Too Low"}:
+        return False, "Invalid game outcome detected."
+
+    confidence = event["confidence"]
+    if not isinstance(confidence, (int, float)) or not (0.0 <= float(confidence) <= 1.0):
+        return False, "Confidence score must be between 0.0 and 1.0."
+
+    attempts = event["attempts"]
+    if not isinstance(attempts, int) or attempts < 1:
+        return False, "Attempts must be a positive integer."
+
+    score = event["score"]
+    if not isinstance(score, int) or score < 0:
+        return False, "Score must be a non-negative integer."
+
+    return True, None
+
+
+def append_json_log(log_path: str, event: dict[str, str | int | float]) -> None:
+    """Append one validated event to a JSONL log file."""
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(event) + "\n")
+
+
+def append_error_log(
+    log_path: str,
+    stage: str,
+    error: Exception,
+    context: dict[str, str | int | float] | None = None,
+) -> None:
+    """Append one structured runtime error entry to a JSONL log file."""
+    payload: dict[str, str | int | float | dict[str, str | int | float]] = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "stage": stage,
+        "error_type": type(error).__name__,
+        "message": str(error),
+        "context": context or {},
+    }
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload) + "\n")

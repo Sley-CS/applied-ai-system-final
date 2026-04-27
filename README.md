@@ -1,89 +1,137 @@
-# 🎮 Game Glitch Investigator: The Impossible Guesser
+# Game Glitch Investigator
 
-## 🚨 The Situation
+Game Glitch Investigator is a Streamlit app that helps players find a secret number while exposing game logic in a transparent, testable way. The project started as a broken AI-generated game and evolved into a reliable system with guardrails, confidence scoring, and structured logging. Its value is that it demonstrates practical AI-system engineering: debugging, validation, observability, and reproducible execution.
 
-You asked an AI to build a simple "Number Guessing Game" using Streamlit.
-It wrote the code, ran away, and now the game is unplayable. 
+## Core Utility and AI Capability
 
-- You can't win.
-- The hints lie to you.
-- The secret number seems to have commitment issues.
+- Primary use case: debugging, classifying, and explaining game outcomes (Win, Too High, Too Low) with confidence feedback.
+- Advanced capability integrated into main logic: reliability and testing system.
+- Deep integration points:
+  - Each valid guess produces a confidence score.
+  - Each guess event is validated by guardrails before logging.
+  - Structured JSONL logs capture decisions for auditing and review.
 
-## 🛠️ Setup
+## System Architecture
 
-1. Install dependencies: `pip install -r requirements.txt`
-2. Run the broken app: `python -m streamlit run app.py`
+```mermaid
+flowchart TD
+    A[User Input: guess + difficulty] --> B[Streamlit UI Controller]
+    B --> C[Core Logic Agent logic_utils.py]
+    C --> D[Evaluator and Validator]
+    D --> E[Confidence Score 0.0-1.0]
+    D --> F[Guardrails: schema and range checks]
+    F --> G[Logger assets/gameplay_log.jsonl]
+    C --> H[Game State session_state]
+    H --> I[UI Output: hint, score, status]
+    E --> I
+    J[Automated Tests pytest] --> C
+    K[Human Review of logs and app behavior] --> G
+```
 
-## 🕵️‍♂️ Your Mission
+## Data Flow (Input to Output)
 
-1. **Play the game.** Open the "Developer Debug Info" tab in the app to see the secret number. Try to win.
-2. **Find the State Bug.** Why does the secret number change every time you click "Submit"? Ask ChatGPT: *"How do I keep a variable from resetting in Streamlit when I click a button?"*
-3. **Fix the Logic.** The hints ("Higher/Lower") are wrong. Fix them.
-4. **Refactor & Test.** - Move the logic into `logic_utils.py`.
-   - Run `pytest` in your terminal.
-   - Keep fixing until all tests pass!
+1. Input: the player submits a guess and selected difficulty.
+2. Process: input is parsed and range-checked.
+3. Process: core logic classifies outcome (Win, Too High, Too Low) and updates score/state.
+4. Process: evaluator computes confidence and validates the event payload with guardrails.
+5. Process: if valid, event is appended to JSONL log; if invalid, the app surfaces a safety message and records the issue in an error log.
+6. Output: player sees hint, score, attempts left, confidence, and game status.
 
-## 📝 Document Your Experience
+## Validation and Human-in-the-Loop
 
-- [ ] The purpose of the game is to find a hidden number by using clues.
+- Automated checkpoint: unit tests validate game logic, scoring, parsing, confidence, guardrails, and log writing.
+- Runtime checkpoint: event validator blocks malformed data before it is persisted.
+- Failure audit checkpoint: runtime exceptions and guardrail violations are written to `assets/error_log.jsonl` for later review.
+- Human checkpoint: developer can inspect Debug Info and JSONL logs to audit model-like behavior and reliability.
 
-----The computer is keeping a secret number, and your job is a detective —you make guesses, and the computer gives you hints to help you get closer and closer until you find it.
+## Setup Iinstructions
 
-----The game also teaches you how to think smart. Instead of guessing randomly, you use the hints to cut the possibilities in half each time. For example, if the range is 1 to 100 and your first guess is 50, the computer tells you to go higher or lower — now you already know 50 numbers you can skip!
+1. Clone repository:
+   ```bash
+   git clone https://github.com/Sley-CS/applied-ai-system-final.git
+   cd applied-ai-system-final
+   ```
+2. Create and activate a virtual environment:
+   ```bash
+   python -m venv .venv
+   .venv\Scripts\activate
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Run tests:
+   ```bash
+   pytest -q
+   ```
+5. Launch app:
+   ```bash
+   python -m streamlit run app.py
+   ```
 
-----It's like playing "I'm thinking of a number" with a friend, but the computer is your friend.
+## Sample Interactions
 
+1. In-range, too low guess
+   - Input: difficulty Normal (1-50), secret 37, guess 25
+   - Output: outcome Too Low, hint "Go HIGHER", confidence around 0.7, attempts incremented
 
+2. In-range, too high guess
+   - Input: difficulty Normal (1-50), secret 37, guess 44
+   - Output: outcome Too High, hint "Go LOWER", confidence around 0.8, score adjusted
 
+3. Winning guess
+   - Input: difficulty Normal, secret 37, guess 37
+   - Output: outcome Win, confidence 1.0, success banner, final score shown
 
-- [ ] Here are the bugs found in the game:
+## System Walkthrough: End-to-End Examples
 
-----The hints were backwards. When your guess was too high, the game told you to go higher. That made no sense!
+### Example 1: Early Game with Out-of-Range Input Rejection
 
-----The score was broken. Sometimes the game gave you points for a wrong guess, which is not fair.
+![Gameplay Example 1: Input validation and confidence scoring](assets/screenshot_example1.png)
 
-----The game forgot to reset properly. After you won, clicking "New Game" did not fully restart — the game still thought you already won.
+**What happens:**
+- Player selects Normal difficulty (range 1-50).
+- Player enters guess 5 (in range).
+- System outputs: "Too Low" outcome, hint "Go HIGHER", confidence ~0.56, attempts incremented to 1.
+- Game state updates in real time; player can see the session summary sidebar showing closeness bars.
 
-----The counter was wrong. The game started counting at 1 instead of 0, so you always lost one guess for free.
+**Key reliability features visible:**
+- Confidence score displayed to player for each guess.
+- Attempt counter updated accurately.
+- No invalid attempts consumed (if player had typed out-of-range, system would reject it).
 
-----Wrong guesses still counted. If you typed a letter or a number outside the range, the game still took away one of your attempts.
+### Example 2: Mid-Game Guessing with Score Adjustment
 
-----The difficulty did not change. When you switched from Easy to Hard, the game kept using the same range of numbers.
+![Gameplay Example 2: Score updates and hint feedback](assets/screenshot_example2.png)
 
-----The input box kept your old guess. When you started a new game, your last guess was still sitting in the box.
+**What happens:**
+- Player continues game, enters guess 45 (too high).
+- System outputs: "Too High" outcome, hint "Go LOWER", confidence ~0.52, score adjusted.
+- Session summary now shows multiple attempts with temperature labels (Hot, Warm, Cold, Ice).
+- Developer Debug Info is visible in expander, showing internal state for transparency.
 
-----The hint checkbox kept turning itself back on. Even if you turned off hints, the game turned them back on every time you guessed.
+**Key reliability features visible:**
+- Guardrails silently validated the event payload before logging.
+- Temperature feedback helps player navigate the range more intuitively.
+- All logs are saved to `assets/gameplay_log.jsonl` for later audit.
+- If a guardrail violation occurred, error would be logged to `assets/error_log.jsonl`.
 
-----The attempts counter was always one step behind. It showed the old number instead of the updated one.
+## Design Decisions
 
-----The Enter key did not work. You had to click the button every time — pressing Enter did nothing.
+- Reliability over minimal code: added validation and logs, which increases code complexity but improves trust and debuggability.
+- Interpretable confidence over model-based confidence: confidence is rule-based (distance-derived) and easy to audit, but less expressive than a learned model.
+- Fast local reproducibility over cloud dependencies: no external model API is required, reducing setup friction but limiting advanced language capabilities.
 
-----The buttons disappeared when the game ended. Once you won or lost, the input box and buttons vanished and you could not do anything.
+## Testing Summary
 
+- Method used: automated unit tests with pytest + runtime guardrails + manual UI inspection.
+- Quantitative result: see test output section below (updated from latest run).
+- Qualitative insights:
+  - System behaves consistently when session state and validation rules are enforced.
+  - Edge-case input handling is stronger for empty, non-numeric, scientific, and out-of-range values.
+- Iteration outcome:
+  - Reliability improved after adding event schema checks and confidence bounds validation.
 
-- [ ] Fixes applied
+## Reflection
 
-- Fix swapped hint directions in check_guess (Too High/Too Low)
-- Fix update_score: remove arbitrary even/odd condition, symmetric      
-   penalties, score floor
-- Fix new game button not resetting game status, score, and history
-- Fix attempts counter starting at 1 instead of 0 (game ended too early)
-- Fix invalid/out-of-range guesses consuming an attempt
-- Fix difficulty change not resetting the game or secret range
-- Fix input field retaining last guess after new game
-- Fix show hint checkbox resetting on every submit
-- Fix attempts display always one step behind due to render order
-- Fix Enter key not submitting a guess
-- Fix controls disappearing when game ends (removed st.stop())
-- Refactor: extract reset_game() helper, consolidate session state init,
-  remove duplicate parse_guess, move helpers to top of file,
-  replace difficulty maps with DIFFICULTY_CONFIG dict
-
-## 📸 Demo
-
-- [ ] [images/winning_game_screenshot.png]
-- [ ] [images/passed_tests.png]
-
-## 🚀 Stretch Features
-
-- [ ] [If you choose to complete Challenge 4, insert a screenshot of your Enhanced Game UI here]
+Building the Game Glitch Investigator taught me that AI is a powerful partner, but it’s not magic. I learned that trusting its output without verification is risky, so I focused on building simple checks to catch errors. Ultimately, this project showed me that good problem-solving isn’t just about writing complex code it’s about guiding the AI with clarity, staying curious when things go wrong, and always keeping the human impact in mind

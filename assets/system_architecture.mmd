@@ -1,0 +1,13 @@
+flowchart TD
+    A[User Input: guess + difficulty] --> B[Streamlit UI Controller]
+    B --> C[Core Logic Agent logic_utils.py]
+    C --> D[Evaluator and Validator]
+    D --> E[Confidence Score 0.0-1.0]
+    D --> F[Guardrails: schema and range checks]
+    F --> G[Logger assets/gameplay_log.jsonl]
+    F --> L[Error Logger assets/error_log.jsonl]
+    C --> H[Game State session_state]
+    H --> I[UI Output: hint, score, status]
+    E --> I
+    J[Automated Tests pytest] --> C
+    K[Human Review of logs and app behavior] --> G
